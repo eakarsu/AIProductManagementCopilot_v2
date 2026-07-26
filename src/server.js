@@ -91,6 +91,13 @@ export function createApp() {
       if (req.method === 'GET' && url.pathname === '/api/health') {
         return json(res, 200, { status: 'ok', service: 'product-management-copilot-v2', scope: 'minimal-local-boundary' });
       }
+      if (req.method === 'GET' && url.pathname === '/api/auth/demo-credentials') {
+        if (process.env.NODE_ENV === 'production') return json(res, 404, { error: 'not found' });
+        const expected = credentials();
+        return expected.email && expected.password
+          ? json(res, 200, expected)
+          : json(res, 503, { error: 'Demo credentials are not configured' });
+      }
       if (req.method === 'POST' && url.pathname === '/api/auth/login') {
         const body = await readJson(req);
         const expected = credentials();
