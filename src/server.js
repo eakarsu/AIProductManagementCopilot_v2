@@ -1,3 +1,4 @@
+import {serveNativePromptConsole} from './serveNativePromptConsole.mjs';
 import { createServer } from 'node:http';
 import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -87,6 +88,7 @@ export function createDraft(body) {
 export function createApp() {
   return createServer(async (req, res) => {
     try {
+      if(req.method==='GET'&&new URL(req.url,'http://localhost').pathname==='/ai-workspace')return serveNativePromptConsole(res);
       const url = new URL(req.url, 'http://localhost');
       if (req.method === 'GET' && url.pathname === '/api/health') {
         return json(res, 200, { status: 'ok', service: 'product-management-copilot-v2', scope: 'minimal-local-boundary' });
@@ -114,8 +116,17 @@ export function createApp() {
         const user = verifyToken(req);
         if (!user) return json(res, 401, { error: 'Not authenticated' });
         const body = await readJson(req);
-        const content = await callOpenRouter(String(body.prompt || body.question || 'Suggest one measurable product discovery experiment.'));
-        return json(res, 200, { content, model: process.env.OPENROUTER_MODEL });
+        const prompt = String(body.prompt || body.question || '').trim();
+        if (!prompt) return json(res, 400, { error: 'A prompt is required' });
+        if (!process.env.OPENROUTER_API_KEY || !process.env.OPENROUTER_MODEL) {
+          return json(res, 200, { status: 'unavailable', message: 'AI analysis is unavailable because the provider is not configured. No report was generated.' });
+        }
+        try {
+          const content = await callOpenRouter(prompt);
+          return json(res, 200, { status: 'complete', content, model: process.env.OPENROUTER_MODEL });
+        } catch {
+          return json(res, 200, { status: 'unavailable', message: 'AI analysis is temporarily unavailable from the configured provider. No report was generated.' });
+        }
       }
       if (req.method === 'POST' && url.pathname === '/api/opportunities') {
         const body = await readJson(req);
